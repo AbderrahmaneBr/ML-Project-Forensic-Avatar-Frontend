@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { User, Search, Volume2, X } from 'lucide-react'
+import { User, Search, Volume2, VolumeX, X, Copy, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Message } from '@/types'
 import type { CSSProperties } from 'react'
@@ -8,12 +8,42 @@ interface MessageBubbleProps {
   message: Message
   isStreaming?: boolean
   isSpeaking?: boolean
+  isThisMessageSpeaking?: boolean
   style?: CSSProperties
+  onRead?: (text: string) => void
+  onStopReading?: () => void
 }
 
-export function MessageBubble({ message, isStreaming, isSpeaking, style }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  isStreaming,
+  isSpeaking,
+  isThisMessageSpeaking,
+  style,
+  onRead,
+  onStopReading
+}: MessageBubbleProps) {
   const isAssistant = message.role === 'assistant'
   const [expandedImage, setExpandedImage] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
+  const handleRead = () => {
+    if (isThisMessageSpeaking) {
+      onStopReading?.()
+    } else {
+      onRead?.(message.content)
+    }
+  }
 
   return (
     <>
@@ -84,19 +114,59 @@ export function MessageBubble({ message, isStreaming, isSpeaking, style }: Messa
           </p>
 
           {!isStreaming && (
-            <p className="mt-2 text-[10px] text-muted-foreground/60 flex items-center gap-1.5">
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-              {new Date(message.created_at).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-              {message.images && message.images.length > 0 && (
-                <>
-                  <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-                  {message.images.length} {message.images.length === 1 ? 'image' : 'images'}
-                </>
+            <div className="mt-2 flex items-center justify-between">
+              <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1.5">
+                <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                {new Date(message.created_at).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+                {message.images && message.images.length > 0 && (
+                  <>
+                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                    {message.images.length} {message.images.length === 1 ? 'image' : 'images'}
+                  </>
+                )}
+              </p>
+
+              {/* Action buttons for assistant messages */}
+              {isAssistant && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleCopy}
+                    className={cn(
+                      "p-1.5 rounded-lg transition-all",
+                      copied
+                        ? "bg-success/20 text-success"
+                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                    )}
+                    title="Copy to clipboard"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={handleRead}
+                    className={cn(
+                      "p-1.5 rounded-lg transition-all",
+                      isThisMessageSpeaking
+                        ? "bg-primary/20 text-primary"
+                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                    )}
+                    title={isThisMessageSpeaking ? "Stop reading" : "Read aloud"}
+                  >
+                    {isThisMessageSpeaking ? (
+                      <VolumeX className="h-4 w-4" />
+                    ) : (
+                      <Volume2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               )}
-            </p>
+            </div>
           )}
         </div>
 

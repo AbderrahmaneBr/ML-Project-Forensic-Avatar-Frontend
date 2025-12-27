@@ -13,6 +13,8 @@ export function useTextToSpeech() {
   // Track when last token was received to detect stream pauses
   const lastTokenTimeRef = useRef<number>(0)
   const streamActiveRef = useRef<boolean>(false)
+  // Track if we're in streaming mode (vs reading full text)
+  const isStreamingModeRef = useRef<boolean>(false)
 
   // Load voices when they become available
   useEffect(() => {
@@ -139,10 +141,18 @@ export function useTextToSpeech() {
     const text = pendingTextRef.current
     const sentenceMatch = text.match(/^(.*?[.!?])\s*/s)
 
-    if (!sentenceMatch) return
-
-    const rawSentence = sentenceMatch[1].trim()
-    pendingTextRef.current = text.slice(sentenceMatch[0].length)
+    let rawSentence: string
+    if (sentenceMatch) {
+      rawSentence = sentenceMatch[1].trim()
+      pendingTextRef.current = text.slice(sentenceMatch[0].length)
+    } else if (!isStreamingModeRef.current) {
+      // In non-streaming mode, speak whatever text we have even without punctuation
+      rawSentence = text.trim()
+      pendingTextRef.current = ''
+    } else {
+      // In streaming mode, wait for complete sentence
+      return
+    }
 
     // Clean the sentence for speech
     const sentence = cleanTextForSpeech(rawSentence)
@@ -172,9 +182,10 @@ export function useTextToSpeech() {
     utterance.onend = () => {
       isProcessingRef.current = false
       if (pendingTextRef.current.trim()) {
-        // Check if stream is still active before speaking next sentence
-        if (isStreamActive()) {
-          // Stream is active, continue speaking
+        // In streaming mode, check if stream is still active before speaking next sentence
+        // In non-streaming mode (speak/flush), always continue to the end
+        if (!isStreamingModeRef.current || isStreamActive()) {
+          // Continue speaking
           setTimeout(processText, 100)
         } else {
           // Stream paused - stop speaking and wait for more tokens
@@ -182,14 +193,20 @@ export function useTextToSpeech() {
         }
       } else {
         setIsSpeaking(false)
+        isStreamingModeRef.current = false
       }
     }
 
     utterance.onerror = (event) => {
       console.warn('Speech synthesis error:', event.error)
       isProcessingRef.current = false
-      if (pendingTextRef.current.trim() && isStreamActive()) {
-        processText()
+      if (pendingTextRef.current.trim()) {
+        // In non-streaming mode, always try to continue
+        if (!isStreamingModeRef.current || isStreamActive()) {
+          processText()
+        } else {
+          setIsSpeaking(false)
+        }
       } else {
         setIsSpeaking(false)
       }
@@ -201,7 +218,18 @@ export function useTextToSpeech() {
 
   const speak = useCallback(
     (text: string) => {
+      // Stop any current speech first
+      speechSynthesis.cancel()
+      // For non-streaming speech, mark as non-streaming so all text gets spoken
+      isStreamingModeRef.current = false
+      streamActiveRef.current = true
+      lastTokenTimeRef.current = Date.now()
+      isProcessingRef.current = false
       pendingTextRef.current = text
+      // Ensure text ends with punctuation for proper processing
+      if (!pendingTextRef.current.match(/[.!?]\s*$/)) {
+        pendingTextRef.current += '.'
+      }
       processText()
     },
     [processText]
@@ -212,6 +240,7 @@ export function useTextToSpeech() {
       pendingTextRef.current += token
       lastTokenTimeRef.current = Date.now()
       streamActiveRef.current = true
+      isStreamingModeRef.current = true
 
       // Start processing if we have a complete sentence and aren't already speaking
       if (!isProcessingRef.current && pendingTextRef.current.match(/[.!?]\s*$/)) {
@@ -226,12 +255,14 @@ export function useTextToSpeech() {
     pendingTextRef.current = ''
     isProcessingRef.current = false
     streamActiveRef.current = false
+    isStreamingModeRef.current = false
     lastTokenTimeRef.current = 0
     setIsSpeaking(false)
   }, [])
 
   const flush = useCallback(() => {
-    // Mark stream as complete so all remaining text will be spoken
+    // Switch to non-streaming mode so all remaining text will be spoken
+    isStreamingModeRef.current = false
     streamActiveRef.current = true
     lastTokenTimeRef.current = Date.now()
     // Add a period if text doesn't end with punctuation to force processing

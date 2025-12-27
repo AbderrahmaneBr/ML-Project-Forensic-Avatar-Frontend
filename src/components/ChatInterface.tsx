@@ -45,7 +45,8 @@ export function ChatInterface({
   const userMessageRef = useRef<Message | null>(null)
   const streamingContentRef = useRef<string>('')
   const streamingUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const { speakToken, stop: stopTts, flush: flushTts, isSpeaking } = useTextToSpeech()
+  const { speak, speakToken, stop: stopTts, flush: flushTts, isSpeaking } = useTextToSpeech()
+  const [readingMessageId, setReadingMessageId] = useState<string | null>(null)
 
   // Keep messages ref updated
   useEffect(() => {
@@ -65,7 +66,15 @@ export function ChatInterface({
   // Stop TTS when conversation changes
   useEffect(() => {
     stopTts()
+    setReadingMessageId(null)
   }, [conversation?.id, stopTts])
+
+  // Clear reading message ID when speaking stops
+  useEffect(() => {
+    if (!isSpeaking && readingMessageId) {
+      setReadingMessageId(null)
+    }
+  }, [isSpeaking, readingMessageId])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -298,6 +307,16 @@ export function ChatInterface({
     setTtsEnabled((prev) => !prev)
   }
 
+  const handleReadMessage = useCallback((messageId: string, text: string) => {
+    setReadingMessageId(messageId)
+    speak(text)
+  }, [speak])
+
+  const handleStopReading = useCallback(() => {
+    stopTts()
+    setReadingMessageId(null)
+  }, [stopTts])
+
   return (
     <div className="flex h-full flex-col transition-theme">
       {/* Header */}
@@ -445,6 +464,10 @@ export function ChatInterface({
                   key={msg.id}
                   message={msg}
                   style={{ animationDelay: `${i * 50}ms` }}
+                  isSpeaking={isSpeaking}
+                  isThisMessageSpeaking={readingMessageId === msg.id && isSpeaking}
+                  onRead={(text) => handleReadMessage(msg.id, text)}
+                  onStopReading={handleStopReading}
                 />
               ))}
 
