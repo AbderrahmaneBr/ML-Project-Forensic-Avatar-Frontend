@@ -100,6 +100,25 @@ export function useTextToSpeech() {
     return availableVoices[0]
   }, [availableVoices])
 
+  // Clean text for TTS - remove punctuation that would be read aloud
+  const cleanTextForSpeech = useCallback((text: string): string => {
+    return text
+      // Remove standalone punctuation and symbols
+      .replace(/[*#@$%^&()_+=\[\]{}|\\<>\/~`"]/g, '')
+      // Replace multiple dashes/underscores with space
+      .replace(/[-_]{2,}/g, ' ')
+      // Remove bullet points and list markers
+      .replace(/^[\s]*[-•·]\s*/gm, '')
+      // Remove markdown formatting
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/__/g, '')
+      .replace(/_/g, ' ')
+      // Clean up multiple spaces
+      .replace(/\s+/g, ' ')
+      .trim()
+  }, [])
+
   const processText = useCallback(() => {
     if (isProcessingRef.current || !pendingTextRef.current.trim()) return
 
@@ -109,8 +128,11 @@ export function useTextToSpeech() {
 
     if (!sentenceMatch) return
 
-    const sentence = sentenceMatch[1].trim()
+    const rawSentence = sentenceMatch[1].trim()
     pendingTextRef.current = text.slice(sentenceMatch[0].length)
+
+    // Clean the sentence for speech
+    const sentence = cleanTextForSpeech(rawSentence)
 
     if (!sentence) {
       if (pendingTextRef.current) {
@@ -156,7 +178,7 @@ export function useTextToSpeech() {
 
     utteranceRef.current = utterance
     speechSynthesis.speak(utterance)
-  }, [getBestVoice])
+  }, [getBestVoice, cleanTextForSpeech])
 
   const speak = useCallback(
     (text: string) => {

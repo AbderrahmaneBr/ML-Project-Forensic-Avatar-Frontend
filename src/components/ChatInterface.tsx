@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ImageUpload } from '@/components/ImageUpload'
 import { MessageBubble } from '@/components/MessageBubble'
+import { StreamingMessage } from '@/components/StreamingMessage'
 import { AnalysisProgress } from '@/components/AnalysisProgress'
 import { VoiceIndicator } from '@/components/VoiceIndicator'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -42,6 +43,8 @@ export function ChatInterface({
   const abortRef = useRef<(() => void) | null>(null)
   const messagesRef = useRef<Message[]>(messages)
   const userMessageRef = useRef<Message | null>(null)
+  const streamingContentRef = useRef<string>('')
+  const streamingUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { speakToken, stop: stopTts, flush: flushTts, isSpeaking } = useTextToSpeech()
 
   // Keep messages ref updated
@@ -149,6 +152,11 @@ export function ChatInterface({
     }
 
     setStreamingMessage('')
+    streamingContentRef.current = ''
+    if (streamingUpdateTimeoutRef.current) {
+      clearTimeout(streamingUpdateTimeoutRef.current)
+      streamingUpdateTimeoutRef.current = null
+    }
     setProgress({ step: 'idle' })
     setIsAnalyzing(false)
   }, [streamingMessage, stopTts, onMessagesUpdate])
@@ -200,6 +208,7 @@ export function ChatInterface({
     setIsAnalyzing(true)
     setProgress({ step: 'idle' })
     setStreamingMessage('')
+    streamingContentRef.current = ''
 
     // Start analysis stream
     abortRef.current = api.analyzeStream(
@@ -218,11 +227,27 @@ export function ChatInterface({
           })
         } else if (event.event === 'text') {
           const token = data.text || ''
-          setStreamingMessage((prev) => prev + token)
+          // Accumulate in ref to avoid re-renders per token
+          streamingContentRef.current += token
+
+          // Batch state updates - only update every 50ms
+          if (!streamingUpdateTimeoutRef.current) {
+            streamingUpdateTimeoutRef.current = setTimeout(() => {
+              setStreamingMessage(streamingContentRef.current)
+              streamingUpdateTimeoutRef.current = null
+            }, 50)
+          }
+
           if (ttsEnabled && token) {
             speakToken(token)
           }
         } else if (event.event === 'complete') {
+          // Clear any pending timeout
+          if (streamingUpdateTimeoutRef.current) {
+            clearTimeout(streamingUpdateTimeoutRef.current)
+            streamingUpdateTimeoutRef.current = null
+          }
+
           const assistantMessage: Message = {
             id: data.message_id || uuidv4(),
             role: 'assistant',
@@ -231,6 +256,7 @@ export function ChatInterface({
           }
           onMessagesUpdate([...messagesRef.current, assistantMessage])
           setStreamingMessage('')
+          streamingContentRef.current = ''
           setProgress({ step: 'complete' })
           setIsAnalyzing(false)
           setImages([])
@@ -426,16 +452,10 @@ export function ChatInterface({
                 <AnalysisProgress progress={progress} />
               )}
 
-              {/* Streaming Message */}
+              {/* Streaming Message - Using optimized component */}
               {streamingMessage && (
-                <MessageBubble
-                  message={{
-                    id: 'streaming',
-                    role: 'assistant',
-                    content: streamingMessage,
-                    created_at: new Date().toISOString(),
-                  }}
-                  isStreaming
+                <StreamingMessage
+                  content={streamingMessage}
                   isSpeaking={isSpeaking}
                 />
               )}
