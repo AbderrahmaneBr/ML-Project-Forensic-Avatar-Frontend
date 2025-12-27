@@ -379,6 +379,7 @@ export function ChatInterface({
                 <DetectiveAvatar
                   isSpeaking={isSpeaking}
                   className="h-full w-full"
+                  onStop={stopTts}
                 />
               </Suspense>
             </ErrorBoundary>

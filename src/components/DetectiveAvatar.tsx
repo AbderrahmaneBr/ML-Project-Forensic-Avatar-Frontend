@@ -1,48 +1,107 @@
 import { useRef, useState, useEffect, Suspense } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, OrbitControls } from "@react-three/drei";
+import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
-import { Fingerprint } from "lucide-react";
+import { Fingerprint, Square } from "lucide-react";
 
 interface DetectiveAvatarProps {
   isSpeaking: boolean;
   className?: string;
+  onStop?: () => void;
 }
 
 // Avatar model - place your .glb file in public/models/
 // For Ready Player Me avatars, use: https://models.readyplayer.me/[avatar-id].glb
 const AVATAR_URL = "/models/avatar.glb";
+// Background image - place your image in public/images/
+const BACKGROUND_IMAGE_URL = "/images/background.jpg";
 
 // Different morph target naming conventions for lip sync
 // Ready Player Me / Visage standard
 const RPM_VISEMES = [
-  "viseme_aa", "viseme_E", "viseme_I", "viseme_O", "viseme_U",
-  "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
-  "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_sil",
+  "viseme_aa",
+  "viseme_E",
+  "viseme_I",
+  "viseme_O",
+  "viseme_U",
+  "viseme_PP",
+  "viseme_FF",
+  "viseme_TH",
+  "viseme_DD",
+  "viseme_kk",
+  "viseme_CH",
+  "viseme_SS",
+  "viseme_nn",
+  "viseme_RR",
+  "viseme_sil",
 ];
 
 // ARKit / Apple blend shapes
 const ARKIT_MOUTH_SHAPES = [
-  "jawOpen", "mouthClose", "mouthFunnel", "mouthPucker", "mouthLeft",
-  "mouthRight", "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft",
-  "mouthFrownRight", "mouthDimpleLeft", "mouthDimpleRight", "mouthStretchLeft",
-  "mouthStretchRight", "mouthRollLower", "mouthRollUpper", "mouthShrugLower",
-  "mouthShrugUpper", "mouthPressLeft", "mouthPressRight", "mouthLowerDownLeft",
-  "mouthLowerDownRight", "mouthUpperUpLeft", "mouthUpperUpRight",
+  "jawOpen",
+  "mouthClose",
+  "mouthFunnel",
+  "mouthPucker",
+  "mouthLeft",
+  "mouthRight",
+  "mouthSmileLeft",
+  "mouthSmileRight",
+  "mouthFrownLeft",
+  "mouthFrownRight",
+  "mouthDimpleLeft",
+  "mouthDimpleRight",
+  "mouthStretchLeft",
+  "mouthStretchRight",
+  "mouthRollLower",
+  "mouthRollUpper",
+  "mouthShrugLower",
+  "mouthShrugUpper",
+  "mouthPressLeft",
+  "mouthPressRight",
+  "mouthLowerDownLeft",
+  "mouthLowerDownRight",
+  "mouthUpperUpLeft",
+  "mouthUpperUpRight",
 ];
 
 // Simple/Generic mouth shapes (common in many models)
 const SIMPLE_MOUTH_SHAPES = [
-  "mouthOpen", "mouth_open", "MouthOpen", "Mouth_Open",
-  "jawOpen", "jaw_open", "JawOpen", "Jaw_Open",
-  "A", "E", "I", "O", "U", "a", "e", "i", "o", "u",
-  "AA", "EE", "II", "OO", "UU",
-  "Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_U", "Fcl_MTH_E", "Fcl_MTH_O", // VRoid
+  "mouthOpen",
+  "mouth_open",
+  "MouthOpen",
+  "Mouth_Open",
+  "jawOpen",
+  "jaw_open",
+  "JawOpen",
+  "Jaw_Open",
+  "A",
+  "E",
+  "I",
+  "O",
+  "U",
+  "a",
+  "e",
+  "i",
+  "o",
+  "u",
+  "AA",
+  "EE",
+  "II",
+  "OO",
+  "UU",
+  "Fcl_MTH_A",
+  "Fcl_MTH_I",
+  "Fcl_MTH_U",
+  "Fcl_MTH_E",
+  "Fcl_MTH_O", // VRoid
 ];
 
 // Mixamo naming convention
 const MIXAMO_MOUTH_SHAPES = [
-  "Mouth_Open", "Mouth_Narrow", "Mouth_Smile", "Mouth_Frown",
+  "Mouth_Open",
+  "Mouth_Narrow",
+  "Mouth_Smile",
+  "Mouth_Frown",
 ];
 
 // Check if WebGL is available
@@ -80,7 +139,15 @@ function detectMouthMorphTargets(dictionary: Record<string, number>): string[] {
 
   // If no exact matches, look for partial matches with common keywords
   if (mouthTargets.length === 0) {
-    const mouthKeywords = ["mouth", "jaw", "lip", "viseme", "mth", "talk", "speak"];
+    const mouthKeywords = [
+      "mouth",
+      "jaw",
+      "lip",
+      "viseme",
+      "mth",
+      "talk",
+      "speak",
+    ];
     for (const key of availableKeys) {
       const lowerKey = key.toLowerCase();
       if (mouthKeywords.some((kw) => lowerKey.includes(kw))) {
@@ -93,21 +160,49 @@ function detectMouthMorphTargets(dictionary: Record<string, number>): string[] {
 }
 
 // Detect blink morph targets
-function detectBlinkMorphTargets(dictionary: Record<string, number>): { left?: string; right?: string } {
+function detectBlinkMorphTargets(dictionary: Record<string, number>): {
+  left?: string;
+  right?: string;
+} {
   const result: { left?: string; right?: string } = {};
 
   // Common blink naming patterns
   const blinkPatterns = {
-    left: ["eyeBlinkLeft", "eyeBlink_L", "blink_L", "Blink_L", "eye_blink_left", "Fcl_EYE_Close_L"],
-    right: ["eyeBlinkRight", "eyeBlink_R", "blink_R", "Blink_R", "eye_blink_right", "Fcl_EYE_Close_R"],
+    left: [
+      "eyeBlinkLeft",
+      "eyeBlink_L",
+      "blink_L",
+      "Blink_L",
+      "eye_blink_left",
+      "Fcl_EYE_Close_L",
+    ],
+    right: [
+      "eyeBlinkRight",
+      "eyeBlink_R",
+      "blink_R",
+      "Blink_R",
+      "eye_blink_right",
+      "Fcl_EYE_Close_R",
+    ],
   };
 
   for (const key of Object.keys(dictionary)) {
     const lowerKey = key.toLowerCase();
-    if (lowerKey.includes("blink") || (lowerKey.includes("eye") && lowerKey.includes("close"))) {
-      if (lowerKey.includes("left") || lowerKey.endsWith("_l") || lowerKey.endsWith("l")) {
+    if (
+      lowerKey.includes("blink") ||
+      (lowerKey.includes("eye") && lowerKey.includes("close"))
+    ) {
+      if (
+        lowerKey.includes("left") ||
+        lowerKey.endsWith("_l") ||
+        lowerKey.endsWith("l")
+      ) {
         result.left = key;
-      } else if (lowerKey.includes("right") || lowerKey.endsWith("_r") || lowerKey.endsWith("r")) {
+      } else if (
+        lowerKey.includes("right") ||
+        lowerKey.endsWith("_r") ||
+        lowerKey.endsWith("r")
+      ) {
         result.right = key;
       }
     }
@@ -156,30 +251,24 @@ function AvatarModel({ isSpeaking }: AvatarModelProps) {
       if (child instanceof THREE.SkinnedMesh && child.morphTargetDictionary) {
         meshesWithMorphs.current.push(child);
 
-        // Log available morph targets for debugging
-        const availableTargets = Object.keys(child.morphTargetDictionary);
-        console.log("Available morph targets:", availableTargets);
-
         // Detect mouth targets if not already found
         if (detectedMouthTargets.current.length === 0) {
-          detectedMouthTargets.current = detectMouthMorphTargets(child.morphTargetDictionary);
-          console.log("Detected mouth targets:", detectedMouthTargets.current);
+          detectedMouthTargets.current = detectMouthMorphTargets(
+            child.morphTargetDictionary
+          );
         }
 
         // Detect blink targets if not already found
-        if (!detectedBlinkTargets.current.left && !detectedBlinkTargets.current.right) {
-          detectedBlinkTargets.current = detectBlinkMorphTargets(child.morphTargetDictionary);
-          console.log("Detected blink targets:", detectedBlinkTargets.current);
+        if (
+          !detectedBlinkTargets.current.left &&
+          !detectedBlinkTargets.current.right
+        ) {
+          detectedBlinkTargets.current = detectBlinkMorphTargets(
+            child.morphTargetDictionary
+          );
         }
       }
     });
-
-    if (meshesWithMorphs.current.length === 0) {
-      console.log("No meshes with morph targets found in model");
-    }
-    if (detectedMouthTargets.current.length === 0) {
-      console.log("No mouth/lip morph targets found - lip sync will not work");
-    }
   }, [scene]);
 
   // Animation loop
@@ -215,7 +304,8 @@ function AvatarModel({ isSpeaking }: AvatarModelProps) {
       }
 
       // Smoothly interpolate mouth open amount
-      anim.mouthOpenAmount += (anim.targetMouthOpen - anim.mouthOpenAmount) * 0.25;
+      anim.mouthOpenAmount +=
+        (anim.targetMouthOpen - anim.mouthOpenAmount) * 0.25;
 
       // Apply mouth animation to all meshes
       meshes.forEach((mesh) => {
@@ -318,7 +408,7 @@ function AvatarModel({ isSpeaking }: AvatarModelProps) {
 
   return (
     <group ref={groupRef} position={[0, -2.005, 0.5]} scale={1.2}>
-      <primitive object={scene} />
+      <primitive object={scene} castShadow receiveShadow />
     </group>
   );
 }
@@ -329,6 +419,7 @@ useGLTF.preload(AVATAR_URL);
 export function DetectiveAvatar({
   isSpeaking,
   className,
+  onStop,
 }: DetectiveAvatarProps) {
   const [webGLSupported, setWebGLSupported] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -353,8 +444,27 @@ export function DetectiveAvatar({
   }
 
   return (
-    <div className={className}>
+    <div className={`${className} relative`}>
+      {/* Background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
+      />
+      {/* Dark overlay for moody atmosphere */}
+      <div className="absolute inset-0 bg-black/40" />
+
+      {/* Stop button - visible only when speaking */}
+      {isSpeaking && onStop && (
+        <button
+          onClick={onStop}
+          className="absolute top-3 right-3 z-10 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-destructive/20 hover:border-destructive/50 transition-all duration-200 group"
+          title="Stop speaking"
+        >
+          <Square className="h-4 w-4 text-muted-foreground group-hover:text-destructive fill-current" />
+        </button>
+      )}
       <Canvas
+        shadows
         camera={{ position: [0, 0, 1.5], fov: 35 }}
         style={{ background: "transparent" }}
         gl={{
@@ -365,30 +475,103 @@ export function DetectiveAvatar({
         }}
         onCreated={({ gl }) => {
           gl.setClearColor(0x000000, 0);
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
         onError={() => setHasError(true)}
       >
-        <ambientLight intensity={0.8} />
-        <directionalLight position={[2, 2, 5]} intensity={1.2} />
-        <directionalLight
-          position={[-2, 1, 3]}
-          intensity={0.6}
-          color="#e8e8ff"
+        {/* Warm ambient base - soft detective office glow */}
+        <ambientLight intensity={0} color="#ffecd2" />
+
+        {/* Main key light - warm desk lamp feel */}
+        <spotLight
+          position={[1.5, 2, 3]}
+          angle={0.5}
+          penumbra={0.7}
+          intensity={5}
+          color="#ffb366"
+          castShadow
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+          shadow-bias={-0.0001}
+          shadow-radius={8}
         />
-        <pointLight position={[0, 0, 2]} intensity={0.4} color="#fff5e6" />
+
+        {/* Secondary warm fill from opposite side */}
+        <directionalLight
+          position={[-2, 1.5, 2]}
+          intensity={5}
+          color="#ffd699"
+        />
+
+        {/* Warm rim light - golden hour backlight */}
+        <pointLight position={[0, 1.5, -2]} intensity={5} color="#cc9933" />
+
+        {/* Face fill - warm soft light */}
+        <pointLight position={[0, 0.5, 2.5]} intensity={3} color="#fff5e6" />
+
+        {/* Direct face light - front spotlight */}
+        <spotLight
+          position={[0, 0, 2]}
+          angle={0.4}
+          penumbra={0.6}
+          intensity={1.5}
+          color="#fff8f0"
+          castShadow
+          shadow-mapSize-width={512}
+          shadow-mapSize-height={512}
+          shadow-bias={-0.0001}
+          shadow-radius={4}
+        />
+
+        {/* Yellow uplight - under face pointing up */}
+        <directionalLight position={[0, -2, 1]} intensity={1} color="#ffd700" />
+
+        {/* Top-down warm accent */}
+        <pointLight position={[0, 3, 1]} intensity={20} color="#ffcc80" />
+
+        {/* Blue rim light - left side of avatar */}
+        <spotLight
+          position={[-1.5, 0, 0.5]}
+          angle={0.6}
+          penumbra={0.5}
+          intensity={20}
+          color="#4a90d9"
+          target-position={[0, 0, 0]}
+        />
+
+        {/* Blue rim light - right side of avatar */}
+        <spotLight
+          position={[1.5, 0, 0.5]}
+          angle={0.6}
+          penumbra={0.5}
+          intensity={10}
+          color="#4a90d9"
+          target-position={[0, 0, 0]}
+        />
+
+        {/* Green rim light - left side lower */}
+        <spotLight
+          position={[-1.8, -0.5, 0.3]}
+          angle={0.5}
+          penumbra={0.6}
+          intensity={20}
+          color="#3dd68c"
+          target-position={[0, 0, 0]}
+        />
+
+        {/* Green rim light - right side lower */}
+        <spotLight
+          position={[1.8, -0.5, 0.3]}
+          angle={0.5}
+          penumbra={0.6}
+          intensity={5}
+          color="#3dd68c"
+          target-position={[0, 0, 0]}
+        />
 
         <Suspense fallback={null}>
           <AvatarModel isSpeaking={isSpeaking} />
         </Suspense>
-
-        <OrbitControls
-          enableZoom={false}
-          enablePan={false}
-          minPolarAngle={Math.PI / 2.2}
-          maxPolarAngle={Math.PI / 1.9}
-          minAzimuthAngle={-Math.PI / 8}
-          maxAzimuthAngle={Math.PI / 8}
-        />
       </Canvas>
     </div>
   );
