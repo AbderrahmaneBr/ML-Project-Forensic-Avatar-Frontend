@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+// How long to wait before considering stream "paused" (ms)
+const STREAM_PAUSE_THRESHOLD = 250
+
 export function useTextToSpeech() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [isReady, setIsReady] = useState(false)
@@ -7,6 +10,9 @@ export function useTextToSpeech() {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
   const pendingTextRef = useRef<string>('')
   const isProcessingRef = useRef(false)
+  // Track when last token was received to detect stream pauses
+  const lastTokenTimeRef = useRef<number>(0)
+  const streamActiveRef = useRef<boolean>(false)
 
   // Load voices when they become available
   useEffect(() => {
@@ -119,6 +125,13 @@ export function useTextToSpeech() {
       .trim()
   }, [])
 
+  // Check if stream is still actively sending tokens
+  const isStreamActive = useCallback(() => {
+    if (!streamActiveRef.current) return false
+    const timeSinceLastToken = Date.now() - lastTokenTimeRef.current
+    return timeSinceLastToken < STREAM_PAUSE_THRESHOLD
+  }, [])
+
   const processText = useCallback(() => {
     if (isProcessingRef.current || !pendingTextRef.current.trim()) return
 
@@ -159,8 +172,14 @@ export function useTextToSpeech() {
     utterance.onend = () => {
       isProcessingRef.current = false
       if (pendingTextRef.current.trim()) {
-        // Small pause between sentences for natural flow
-        setTimeout(processText, 100)
+        // Check if stream is still active before speaking next sentence
+        if (isStreamActive()) {
+          // Stream is active, continue speaking
+          setTimeout(processText, 100)
+        } else {
+          // Stream paused - stop speaking and wait for more tokens
+          setIsSpeaking(false)
+        }
       } else {
         setIsSpeaking(false)
       }
@@ -169,7 +188,7 @@ export function useTextToSpeech() {
     utterance.onerror = (event) => {
       console.warn('Speech synthesis error:', event.error)
       isProcessingRef.current = false
-      if (pendingTextRef.current.trim()) {
+      if (pendingTextRef.current.trim() && isStreamActive()) {
         processText()
       } else {
         setIsSpeaking(false)
@@ -178,7 +197,7 @@ export function useTextToSpeech() {
 
     utteranceRef.current = utterance
     speechSynthesis.speak(utterance)
-  }, [getBestVoice, cleanTextForSpeech])
+  }, [getBestVoice, cleanTextForSpeech, isStreamActive])
 
   const speak = useCallback(
     (text: string) => {
@@ -191,6 +210,8 @@ export function useTextToSpeech() {
   const speakToken = useCallback(
     (token: string) => {
       pendingTextRef.current += token
+      lastTokenTimeRef.current = Date.now()
+      streamActiveRef.current = true
 
       // Start processing if we have a complete sentence and aren't already speaking
       if (!isProcessingRef.current && pendingTextRef.current.match(/[.!?]\s*$/)) {
@@ -204,10 +225,15 @@ export function useTextToSpeech() {
     speechSynthesis.cancel()
     pendingTextRef.current = ''
     isProcessingRef.current = false
+    streamActiveRef.current = false
+    lastTokenTimeRef.current = 0
     setIsSpeaking(false)
   }, [])
 
   const flush = useCallback(() => {
+    // Mark stream as complete so all remaining text will be spoken
+    streamActiveRef.current = true
+    lastTokenTimeRef.current = Date.now()
     // Add a period if text doesn't end with punctuation to force processing
     if (pendingTextRef.current.trim() && !pendingTextRef.current.match(/[.!?]\s*$/)) {
       pendingTextRef.current += '.'
