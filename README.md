@@ -1,73 +1,139 @@
-# React + TypeScript + Vite
+# Frontend - AI Forensic Avatar
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React frontend for the AI Forensic Avatar application. Features a 3D detective avatar with lip-sync, text-to-speech, and real-time streaming chat interface.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React 19** - UI framework
+- **TypeScript** - Type safety
+- **Vite** - Build tool
+- **Tailwind CSS v4** - Styling
+- **Three.js / React Three Fiber** - 3D avatar rendering
+- **Radix UI** - Accessible UI components
+- **Web Speech API** - Text-to-speech
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- 3D animated detective avatar with lip-sync
+- Real-time streaming AI responses (SSE)
+- Text-to-speech narration with natural voices
+- Image upload for forensic analysis
+- Conversation history management
+- Dark themed detective aesthetic
+- Responsive design
 
-## Expanding the ESLint configuration
+## Project Structure
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+frontend/
+├── public/
+│   ├── images/          # Background images
+│   └── models/          # 3D avatar .glb files
+├── src/
+│   ├── components/
+│   │   ├── ui/          # Reusable UI components
+│   │   ├── ChatInterface.tsx    # Main chat UI
+│   │   ├── DetectiveAvatar.tsx  # 3D avatar with lighting
+│   │   ├── ImageUpload.tsx      # Drag-drop image upload
+│   │   ├── MessageList.tsx      # Chat message display
+│   │   ├── Sidebar.tsx          # Conversation list
+│   │   └── StreamingMessage.tsx # Streaming text display
+│   ├── hooks/
+│   │   └── useTextToSpeech.ts   # TTS hook
+│   ├── lib/
+│   │   ├── api.ts       # API client functions
+│   │   └── utils.ts     # Utility functions
+│   ├── types/
+│   │   └── index.ts     # TypeScript interfaces
+│   ├── App.tsx          # Root component
+│   ├── index.css        # Global styles
+│   └── main.tsx         # Entry point
+├── Dockerfile           # Production container
+├── nginx.conf           # Nginx configuration
+├── package.json
+├── tailwind.config.js
+├── tsconfig.json
+└── vite.config.ts
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Avatar Setup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Place your 3D avatar model in `public/models/avatar.glb`. The component supports:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Ready Player Me avatars
+- VRoid models
+- Any GLB with morph targets for lip-sync
+
+Supported morph target naming conventions:
+
+- RPM visemes (`viseme_aa`, `viseme_E`, etc.)
+- ARKit blend shapes (`jawOpen`, `mouthOpen`, etc.)
+- VRoid naming (`Fcl_MTH_A`, `Fcl_MTH_O`, etc.)
+
+Background image goes in `public/images/background.jpg`.
+
+## Environment Variables
+
+Create a `.env` file for local development:
+
+```env
+VITE_API_URL=http://localhost:8000
 ```
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 20+
+- Backend API running
+
+### Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`
+
+### Build
+
+```bash
+npm run build
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
+## Docker
+
+Build and run with Docker Compose from the project root:
+
+```bash
+docker-compose up --build frontend
+```
+
+The app will be available at `http://localhost:3000`
+
+## Lighting Configuration
+
+The 3D avatar uses multiple light sources for a detective noir aesthetic:
+
+| Light          | Color     | Purpose                   |
+| -------------- | --------- | ------------------------- |
+| Ambient        | `#ffecd2` | Warm base glow            |
+| Key Light      | `#ffb366` | Main desk lamp feel       |
+| Fill Light     | `#ffd699` | Secondary warm fill       |
+| Rim Light      | `#cc9933` | Golden backlight          |
+| Face Fill      | `#fff5e6` | Soft front light          |
+| Blue Rim       | `#4a90d9` | Side accent lights        |
+| Green Rim      | `#3dd68c` | Lower side accents        |
+| Yellow Uplight | `#ffd700` | Under-face dramatic light |
+
+Adjust intensities in `DetectiveAvatar.tsx` to customize the look.
